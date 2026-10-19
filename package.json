@@ -1,0 +1,13 @@
+{
+  "name": "culita-landing",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m http.server 5173",
+    "start": "python3 -m http.server 5173",
+    "check": "node --check script.js && node --check bottle-scene.mjs"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  }
+}
