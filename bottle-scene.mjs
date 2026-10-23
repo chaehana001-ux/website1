@@ -10,7 +10,11 @@ const about = document.querySelector('.about');
 const shop = document.querySelector('.shop');
 const sticker = about.querySelector('.sticker');
 const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
-const paths = ['assets/models/bottle-01.glb', 'assets/models/bottle-02.glb', 'assets/models/bottle-03.glb'];
+const paths = [
+  new URL('./assets/models/bottle-01.glb', import.meta.url).href,
+  new URL('./assets/models/bottle-02.glb', import.meta.url).href,
+  new URL('./assets/models/bottle-03.glb', import.meta.url).href,
+];
 const models = [];
 const clamp = THREE.MathUtils.clamp;
 let renderer;
@@ -111,9 +115,17 @@ function render(timestamp) {
   lastRenderTime = timestamp;
   if (Math.abs(targetTurns - currentTurns) < 0.0001) currentTurns = targetTurns;
 
-  // Keep rotation continuous; the final dissolve starts exactly when the text pin releases.
-  const firstBlend = models[1] ? THREE.MathUtils.smootherstep(currentTurns, 0.82, 1.18) : 0;
-  const secondBlend = models[2] ? THREE.MathUtils.smootherstep(currentTurns, 2, 2.28) : 0;
+  // Tie product changes to the exact words turning black in the pinned copy.
+  const revealProgress = Number(about.dataset.revealProgress) || 0;
+  const firstChange = Number(about.dataset.firstBottleChange) || 1;
+  const secondChange = Number(about.dataset.secondBottleChange) || 1;
+  const blendDuration = 0.035;
+  const firstBlend = models[1]
+    ? THREE.MathUtils.smootherstep(revealProgress, firstChange, firstChange + blendDuration)
+    : 0;
+  const secondBlend = models[2]
+    ? THREE.MathUtils.smootherstep(revealProgress, secondChange, secondChange + blendDuration)
+    : 0;
   const weights = [1 - firstBlend, firstBlend * (1 - secondBlend), firstBlend * secondBlend];
   const index = weights.indexOf(Math.max(...weights));
   for (let i = 0; i < models.length; i++) {
@@ -145,9 +157,34 @@ function scheduleRender() {
   if (!renderFrame && !disposed) renderFrame = requestAnimationFrame(render);
 }
 
+function enhanceBottleMaterial(material) {
+  if (!material?.isMeshStandardMaterial) return;
+  // The supplied bottles use one baked material for both the glass and label,
+  // so keep it softly translucent without a strong studio-light sheen.
+  material.metalness = 0;
+  material.roughness = 0.2;
+  material.envMapIntensity = 0.72;
+  if (material.isMeshPhysicalMaterial) {
+    material.clearcoat = 0.5;
+    material.clearcoatRoughness = 0.16;
+    material.ior = 1.46;
+    material.specularIntensity = 0.62;
+    material.transmission = 0.14;
+    material.thickness = 0.18;
+    material.attenuationDistance = 2.4;
+    material.attenuationColor = new THREE.Color(0xffffff);
+  }
+  material.needsUpdate = true;
+}
+
 async function loadModel(loader, path) {
   const gltf = await loader.loadAsync(path);
   const object = gltf.scene;
+  object.traverse(node => {
+    if (!node.isMesh) return;
+    if (Array.isArray(node.material)) node.material.forEach(enhanceBottleMaterial);
+    else enhanceBottleMaterial(node.material);
+  });
   object.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(object);
   const center = bounds.getCenter(new THREE.Vector3());
@@ -155,7 +192,8 @@ async function loadModel(loader, path) {
   object.position.sub(center);
   const normalized = new THREE.Group();
   normalized.add(object);
-  normalized.scale.setScalar(2.8 / size.y);
+  // Preserve each source bottle's original proportions and only normalize its height.
+  normalized.scale.setScalar(2.8 / Math.max(size.y, 0.001));
   const spin = new THREE.Group();
   spin.add(normalized);
   spin.visible = false;
@@ -183,13 +221,13 @@ async function init() {
     environment = pmrem.fromScene(room, 0.04);
     scene.environment = environment.texture;
     room.dispose();
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xb8a38d, 0.7));
-    const key = new THREE.DirectionalLight(0xffffff, 2);
-    key.position.set(3, 4, 5);
-    scene.add(key);
-    const fill = new THREE.DirectionalLight(0xe7f4ff, 1);
-    fill.position.set(-3, 1, 2);
-    scene.add(fill);
+    // Soft, low-contrast illumination reveals the translucent body without
+    // returning to the strong glossy hotspots used in the first pass.
+    scene.add(new THREE.AmbientLight(0xffffff, 1.12));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d1ca, 0.34));
+    const bottleShapeLight = new THREE.DirectionalLight(0xfff8ef, 0.42);
+    bottleShapeLight.position.set(-2.5, 3.5, 4);
+    scene.add(bottleShapeLight);
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     resize();
     // Decode sequentially to avoid three large texture/geometry allocations at once.

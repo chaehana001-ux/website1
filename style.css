@@ -18,7 +18,9 @@
 .advantages.is-animated .dot.is-reached{opacity:1}
 .advantages.is-animated .story{opacity:0;transition:opacity .8s ease}
 .advantages.is-animated .story.is-visible{opacity:1}
-@media(prefers-reduced-motion:reduce){.advantages.is-animated .trail-line{clip-path:none}.advantages.is-animated .dot,.advantages.is-animated .story{opacity:1;transition:none}}
+@keyframes story-photo-bounce{0%{transform:translate3d(0,1.8vw,0) scale(.95)}46%{transform:translate3d(0,-.38vw,0) scale(1.018)}66%{transform:translate3d(0,.16vw,0) scale(.993)}83%{transform:translate3d(0,-.06vw,0) scale(1.004)}100%{transform:translate3d(0,0,0) scale(1)}}
+.advantages.is-animated .story.is-visible .story-photo{animation:story-photo-bounce 1s cubic-bezier(.22,.8,.25,1) both;transform-origin:50% 85%;will-change:transform}
+@media(prefers-reduced-motion:reduce){.advantages.is-animated .trail-line{clip-path:none}.advantages.is-animated .dot,.advantages.is-animated .story{opacity:1;transition:none}.advantages.is-animated .story.is-visible .story-photo{animation:none;will-change:auto}}
 /* A transparent 3D foreground shared by Hero and the pinned introduction. */
 .bottle-layer{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:0;transition:opacity .7s ease}
 .bottle-layer[data-state="ready"],.bottle-layer[data-state="complete"],.bottle-layer[data-state="partial"]{opacity:1}
@@ -29,3 +31,72 @@ header{z-index:8}
 main>.shop,main>.advantages,main>.standards,main>.closing,footer{position:relative;z-index:6}
 @media(max-width:600px){.bottle-canvas{width:78vw;height:46svh}}
 @media(prefers-reduced-motion:reduce){.bottle-layer{transition:none}}
+
+/* Reveal the standards rows in sequence once the section title reaches mid-screen. */
+.standards.is-animated .standards-list>div{
+  opacity:0;
+  transform:translate3d(-5vw,0,0);
+  transition:opacity .58s ease,transform .72s cubic-bezier(.22,.78,.22,1);
+  will-change:opacity,transform;
+}
+.standards.is-animated.is-revealed .standards-list>div{opacity:1;transform:translate3d(0,0,0)}
+.standards.is-animated.is-revealed .standards-list>div:nth-child(2){transition-delay:.18s}
+.standards.is-animated.is-revealed .standards-list>div:nth-child(3){transition-delay:.36s}
+@media(prefers-reduced-motion:reduce){
+  .standards.is-animated .standards-list>div{opacity:1;transform:none;transition:none;will-change:auto}
+}
+
+.closing-reveal-letter{display:inline-block;color:#000}
+.closing h2>.closing-reveal-letter{font-weight:700}
+.closing.has-title-motion .closing-reveal-letter{opacity:0;clip-path:inset(100% 0 0 0);transform:translate3d(0,.28em,0);filter:blur(7px)}
+.closing.has-title-motion h2.is-visible .closing-reveal-letter{animation:closing-title-reveal .8s cubic-bezier(.18,.72,.22,1) both;animation-delay:calc(var(--letter-index) * 7ms)}
+@keyframes closing-title-reveal{
+  0%{opacity:0;clip-path:inset(100% 0 0 0);transform:translate3d(0,.28em,0);filter:blur(7px)}
+  100%{opacity:1;clip-path:inset(0 0 0 0);transform:translate3d(0,0,0);filter:blur(0)}
+}
+@media(prefers-reduced-motion:reduce){.closing.has-title-motion .closing-reveal-letter{opacity:1;clip-path:none;transform:none;filter:none;animation:none}}
+
+/* Reveal the shop headline in place, keeping the oversized title grounded. */
+.shop{overflow:hidden}
+.shop-title-letter{display:inline-block}
+.shop.has-title-motion .shop-title-letter{opacity:0;clip-path:inset(100% 0 0 0);transform:translate3d(0,.42em,0);filter:blur(8px)}
+.shop.has-title-motion h2.is-visible .shop-title-letter{animation:shop-title-mask-reveal .72s cubic-bezier(.2,.75,.2,1) both;animation-delay:calc(var(--letter-index) * 22ms)}
+@keyframes shop-title-mask-reveal{
+  0%{opacity:0;clip-path:inset(100% 0 0 0);transform:translate3d(0,.42em,0);filter:blur(8px)}
+  100%{opacity:1;clip-path:inset(0 0 0 0);transform:translate3d(0,0,0);filter:blur(0)}
+}
+@media(prefers-reduced-motion:reduce){.shop.has-title-motion .shop-title-letter{opacity:1;clip-path:none;transform:none;filter:none;animation:none}}
+
+/* Rotate only the central OC mark in the footer's combined logo artwork. */
+.footer-logo{position:relative;display:block;width:20.83vw;height:2.865vw}
+.footer-logo>.logo{width:100%}
+.footer-oc{position:absolute;left:37.83%;top:0;width:24.6%;height:100%;display:grid;place-items:center;background:#fff;perspective:900px}
+.footer-oc img{display:block;width:100%;height:100%;object-fit:contain;animation:footer-oc-spin 5s linear infinite;transform-origin:50% 50%;transform-style:preserve-3d;backface-visibility:visible;will-change:transform}
+@keyframes footer-oc-spin{to{transform:rotateY(360deg)}}
+@media(max-width:600px){.footer-logo{width:140px;height:19.26px}}
+@media(prefers-reduced-motion:reduce){.footer-oc img{animation:none}}
+
+/* Keep the advantages title grounded while its letters clear a soft mask. */
+.advantages-title-letter{display:inline-block}
+.advantages.has-heading-motion .advantages-title-letter{opacity:0;clip-path:inset(100% 0 0 0);transform:translate3d(0,.28em,0);filter:blur(7px)}
+.advantages.has-heading-motion h2.is-visible .advantages-title-letter{animation:advantages-title-reveal .8s cubic-bezier(.18,.72,.22,1) both;animation-delay:calc(var(--letter-index) * 7ms)}
+@keyframes advantages-title-reveal{
+  0%{opacity:0;clip-path:inset(100% 0 0 0);transform:translate3d(0,.28em,0);filter:blur(7px)}
+  100%{opacity:1;clip-path:inset(0 0 0 0);transform:translate3d(0,0,0);filter:blur(0)}
+}
+@media(prefers-reduced-motion:reduce){.advantages.has-heading-motion .advantages-title-letter{opacity:1;clip-path:none;transform:none;filter:none;animation:none}}
+
+/* Match the standards title to the same compact mask-and-focus language. */
+.standards-title-letter{display:inline-block}
+.standards.is-animated .standards-title-letter{opacity:0;clip-path:inset(100% 0 0 0);transform:translate3d(0,.28em,0);filter:blur(7px)}
+.standards.is-animated.is-revealed .standards-title-letter{animation:standards-title-reveal .8s cubic-bezier(.18,.72,.22,1) both;animation-delay:calc(var(--letter-index) * 7ms)}
+@keyframes standards-title-reveal{
+  0%{opacity:0;clip-path:inset(100% 0 0 0);transform:translate3d(0,.28em,0);filter:blur(7px)}
+  100%{opacity:1;clip-path:inset(0 0 0 0);transform:translate3d(0,0,0);filter:blur(0)}
+}
+@media(prefers-reduced-motion:reduce){.standards.is-animated .standards-title-letter{opacity:1;clip-path:none;transform:none;filter:none;animation:none}}
+
+/* Keep the compact TOP control available throughout the page. */
+.top{position:fixed;top:auto;right:2.08vw;bottom:2.08vw;z-index:30;width:1.875vw;height:1.875vw;padding:0;margin-top:0!important;font-size:.625vw;opacity:.6;transition:opacity .2s ease,transform .2s ease}
+.top:hover,.top:focus-visible{opacity:1}
+@media(max-width:600px){.top{position:fixed;top:auto;right:16px;bottom:16px;width:19px;height:19px;font-size:6px}}
