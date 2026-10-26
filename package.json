@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "node --check script.js && node --check bottle-scene.mjs"
+    "check": "node --check script.js && node --check bottle-scene.mjs && node --check bottle-materials.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"

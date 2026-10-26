@@ -1,7 +1,7 @@
 const products=[{name:'레몬러쉬',description:'시트러스와 바질의 조화',detail:'부드러운 레몬러쉬 마우스 워시',image:new URL('./assets/21df0.png',import.meta.url).href},{name:'에메랄드비치',description:'사과와 블루베리의 상쾌한 조화',detail:'청량한 에메랄드 비치 가글',image:new URL('./assets/8589e.png',import.meta.url).href},{name:'선셋로맨스',description:'석양의 낭만을 담은',detail:'부드러운 선셋로맨스 마우스워시',image:new URL('./assets/81cb2.png',import.meta.url).href}];
 const dialog=document.querySelector('dialog');
 function openDialog(html){document.querySelector('.dialog-content').innerHTML=html;dialog.showModal()}
-document.querySelector('.products').innerHTML=products.map((p,i)=>`<article class="product" tabindex="0" role="button" aria-label="${p.name} 상세 보기" data-product="${i}"><h3>${p.name}<span>MOUTHWASH</span></h3><span class="product-number">${i+1}</span><p>${p.description}<br>${p.detail}</p><div class="product-photo"><img src="${p.image}" alt="${p.name} 마우스워시" loading="lazy"></div></article>`).join('');
+document.querySelector('.products').innerHTML=products.map((p,i)=>`<div class="product-slot"><article class="product" tabindex="0" role="button" aria-label="${p.name} 상세 보기" data-product="${i}"><h3>${p.name}<span>MOUTHWASH</span></h3><span class="product-number">${i+1}</span><p>${p.description}<br>${p.detail}</p><div class="product-photo"><img src="${p.image}" alt="${p.name} 마우스워시" loading="lazy"></div></article></div>`).join('');
 const stories=[['A','기분 좋은 맛으로 시작되는 상쾌함',new URL('./assets/7d697.png',import.meta.url).href,new URL('./assets/b7759.png',import.meta.url).href],['B','워터 소믈리에와 완성한 특별한 플레이버',new URL('./assets/5b0d4.png',import.meta.url).href,new URL('./assets/37bd3.png',import.meta.url).href],['C','매일 반복되는 순간을 즐거운 루틴으로',new URL('./assets/52677.png',import.meta.url).href,new URL('./assets/29b74.png',import.meta.url).href],['D','상쾌함에도 취향이 있으니까',null,new URL('./assets/c1243.png',import.meta.url).href]];
 document.querySelector('.stories').innerHTML=stories.map((s,i)=>`<article class="story"><div class="story-label"><b>${s[0]}</b><p>${s[1]}</p></div><div class="story-photo">${s[2]?`<img class="base" src="${s[2]}" alt="" loading="lazy" style="width:${[103.79,109.09,108.39][i]}%;height:${[77.85,81.82,81.29][i]}%;left:${[-1.95,-3.52,0][i]}%;top:${[11.17,7.8,10.43][i]}%">`:''}<img class="overlay" src="${s[3]}" alt="${s[1]}" loading="lazy"></div></article>`).join('');
 function showProduct(i){const p=products[i];openDialog(`<img src="${p.image}" alt="${p.name}"><h2>${p.name}</h2><p>${p.description}<br>${p.detail}</p><p>COMING SOON — 곧 만나보실 수 있습니다.</p>`)}
@@ -34,6 +34,14 @@ const revealParagraphs = [...document.querySelectorAll('.about-copy > p')].map(p
   return { paragraph, letters: [...paragraph.querySelectorAll('.reveal-letter')] };
 });
 const revealMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+// Keep revealed content visible until it fully leaves, then replay on either re-entry.
+function replayWhenVisible(element, className, ready) {
+  const rect = element.getBoundingClientRect();
+  const onScreen = rect.bottom > 0 && rect.top < window.innerHeight;
+  element.classList.toggle(className, revealMotionPreference.matches ||
+    (onScreen && (ready || element.classList.contains(className))));
+}
+
 let revealFrame = 0;
 function updateLetterReveal() {
   revealFrame = 0;
@@ -112,7 +120,7 @@ function updateStoryReveal() {
   });
   storyCards.forEach((card, index) => {
     const reached = reducedMotion || scrollPosition >= thresholds[index] - 1;
-    card.classList.toggle('is-visible', reached);
+    replayWhenVisible(card, 'is-visible', reached);
   });
   trailSection.classList.add('is-animated');
 }
@@ -162,10 +170,7 @@ function updateStandardsReveal() {
   const titleCenter = titleRect.top + titleRect.height / 2;
   const reachedMiddle = titleCenter <= window.innerHeight * 0.55;
   const stillVisible = standardsSection.getBoundingClientRect().bottom > 0;
-  standardsSection.classList.toggle(
-    'is-revealed',
-    revealMotionPreference.matches || (reachedMiddle && stillVisible),
-  );
+  replayWhenVisible(standardsSection, 'is-revealed', reachedMiddle && stillVisible);
 }
 
 function scheduleStandardsReveal() {
@@ -214,10 +219,7 @@ function updateClosingReveal() {
   const headlineCenter = rect.top + rect.height / 2;
   const sectionBottom = closingSection.getBoundingClientRect().bottom;
   const isReady = headlineCenter <= window.innerHeight * 0.55 && sectionBottom > 0;
-  closingHeadline.classList.toggle(
-    'is-visible',
-    revealMotionPreference.matches || isReady,
-  );
+  replayWhenVisible(closingHeadline, 'is-visible', isReady);
 }
 
 function scheduleClosingReveal() {
@@ -261,10 +263,7 @@ function updateShopTitle() {
   const titleRect = shopTitle.getBoundingClientRect();
   // Wait until the complete title is comfortably inside the viewport.
   const inTriggerRange = titleRect.bottom <= window.innerHeight * 0.68 && sectionRect.bottom > 0;
-  shopTitle.classList.toggle(
-    'is-visible',
-    revealMotionPreference.matches || inTriggerRange,
-  );
+  replayWhenVisible(shopTitle, 'is-visible', inTriggerRange);
 }
 
 function scheduleShopTitle() {
@@ -311,10 +310,7 @@ function updateAdvantagesTitle() {
   const titleRect = advantagesTitle.getBoundingClientRect();
   const sectionRect = trailSection.getBoundingClientRect();
   const isReady = titleRect.bottom <= window.innerHeight * 0.72 && sectionRect.bottom > 0;
-  advantagesTitle.classList.toggle(
-    'is-visible',
-    revealMotionPreference.matches || isReady,
-  );
+  replayWhenVisible(advantagesTitle, 'is-visible', isReady);
 }
 
 function scheduleAdvantagesTitle() {
@@ -327,3 +323,132 @@ window.addEventListener('resize', scheduleAdvantagesTitle);
 window.addEventListener('pageshow', scheduleAdvantagesTitle);
 revealMotionPreference.addEventListener('change', scheduleAdvantagesTitle);
 updateAdvantagesTitle();
+
+// Reveal body paragraphs and images independently, including on narrow screens.
+const brandStoryRows = [...document.querySelectorAll('.origin-row')];
+if ('IntersectionObserver' in window) {
+  const brandStoryObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
+        entry.target.classList.add('is-visible');
+      } else if (!entry.isIntersecting) {
+        entry.target.classList.remove('is-visible');
+      }
+    }
+  }, { threshold: [0, 0.15] });
+  function syncBrandStoryMotion() {
+    brandStoryObserver.disconnect();
+    for (const row of brandStoryRows) {
+      row.classList.toggle('has-story-motion', !revealMotionPreference.matches);
+      for (const element of row.querySelectorAll('.origin-copy>p, .origin-art')) {
+        element.classList.remove('is-visible');
+        if (!revealMotionPreference.matches) brandStoryObserver.observe(element);
+      }
+    }
+  }
+  revealMotionPreference.addEventListener('change', syncBrandStoryMotion);
+  syncBrandStoryMotion();
+}
+
+// Ink the heading in reading order as it crosses the viewport; reverse on scroll-up.
+const brandInkHeadings = brandStoryRows.map((row) => {
+  const heading = row.querySelector('h2');
+  const number = row.querySelector('.origin-number');
+  const walker = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  const letters = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const fragment = document.createDocumentFragment();
+    for (const character of node.textContent) {
+      if (/\s/u.test(character)) {
+        fragment.append(document.createTextNode(character));
+      } else {
+        const letter = document.createElement('span');
+        letter.className = 'origin-title-letter';
+        letter.textContent = character;
+        letters.push(letter);
+        fragment.append(letter);
+      }
+    }
+    node.replaceWith(fragment);
+  }
+  return { heading, number, letters };
+});
+let brandInkFrame = 0;
+function updateBrandInk() {
+  brandInkFrame = 0;
+  const viewport = window.innerHeight;
+  for (const { heading, number, letters } of brandInkHeadings) {
+    const rect = heading.getBoundingClientRect();
+    const progress = revealMotionPreference.matches ? 1 : Math.max(0, Math.min(1,
+      (viewport * 0.85 - rect.top) / (viewport * 0.35 + rect.height * 0.3),
+    ));
+    letters.forEach((letter, index) => {
+      const ink = Math.max(0, Math.min(1, (progress * (letters.length + 3) - index) / 4));
+      const shade = Math.round(210 * (1 - ink));
+      const color = `rgb(${shade}, ${shade}, ${shade})`;
+      if (letter.style.color !== color) letter.style.color = color;
+    });
+    const numberShade = Math.round(210 * (1 - progress));
+    number.style.color = `rgb(${numberShade}, ${numberShade}, ${numberShade})`;
+  }
+}
+function scheduleBrandInk() {
+  if (!brandInkFrame) brandInkFrame = requestAnimationFrame(updateBrandInk);
+}
+window.addEventListener('scroll', scheduleBrandInk, { passive: true });
+window.addEventListener('resize', scheduleBrandInk);
+window.addEventListener('pageshow', scheduleBrandInk);
+revealMotionPreference.addEventListener('change', scheduleBrandInk);
+document.fonts.ready.then(scheduleBrandInk);
+updateBrandInk();
+
+// Move only the background wordmark; leave bottle rotation and layout untouched.
+const heroWordmarkSection = document.querySelector('.hero');
+const heroWordmark = heroWordmarkSection?.querySelector('.wordmark');
+heroWordmark?.classList.add('has-entry-motion');
+let heroWordmarkFrame = 0;
+function updateHeroWordmark() {
+  heroWordmarkFrame = 0;
+  if (!heroWordmark) return;
+  const rect = heroWordmarkSection.getBoundingClientRect();
+  const progress = Math.max(0, Math.min(1, -rect.top / Math.max(1, rect.height)));
+  const distance = window.innerWidth <= 600 ? 14 : 30;
+  const shift = revealMotionPreference.matches ? 0 : -distance * progress;
+  heroWordmark.style.setProperty('--hero-wordmark-shift', `${shift.toFixed(2)}px`);
+  replayWhenVisible(heroWordmark, 'is-visible', true);
+}
+function scheduleHeroWordmark() {
+  if (!heroWordmarkFrame) heroWordmarkFrame = requestAnimationFrame(updateHeroWordmark);
+}
+window.addEventListener('scroll', scheduleHeroWordmark, { passive: true });
+window.addEventListener('resize', scheduleHeroWordmark);
+window.addEventListener('pageshow', scheduleHeroWordmark);
+revealMotionPreference.addEventListener('change', scheduleHeroWordmark);
+updateHeroWordmark();
+
+// Observe stationary slots so card movement cannot retrigger its own observer.
+const productGrid = document.querySelector('.products');
+if (productGrid && 'IntersectionObserver' in window) {
+  const productSlots = [...productGrid.querySelectorAll('.product-slot')];
+  const productEntranceObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting && entry.intersectionRatio >= 0.1) {
+        entry.target.classList.add('is-card-visible');
+      } else if (!entry.isIntersecting) {
+        entry.target.classList.remove('is-card-visible');
+      }
+    }
+  }, { threshold: [0, 0.1] });
+  function syncProductEntrance() {
+    productEntranceObserver.disconnect();
+    productGrid.classList.toggle('has-card-motion', !revealMotionPreference.matches);
+    for (const slot of productSlots) {
+      slot.classList.remove('is-card-visible');
+      if (!revealMotionPreference.matches) productEntranceObserver.observe(slot);
+    }
+  }
+  revealMotionPreference.addEventListener('change', syncProductEntrance);
+  syncProductEntrance();
+}

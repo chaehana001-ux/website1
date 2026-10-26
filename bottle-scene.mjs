@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { prepareBottleMesh, createLiquidVolume } from './bottle-materials.mjs';
 
 const layer = document.querySelector('.bottle-layer');
 const mount = layer.querySelector('.bottle-canvas');
@@ -33,15 +33,19 @@ let pmrem;
 function disposeScene() {
   disposed = true;
   cancelAnimationFrame(renderFrame);
+  const textures = new Set();
+  const materials = new Set();
   for (const model of models) {
     model?.traverse(node => {
       node.geometry?.dispose();
-      if (node.material) {
-        for (const value of Object.values(node.material)) if (value?.isTexture) value.dispose();
-        node.material.dispose();
+      for (const material of [node.material].flat().filter(Boolean)) {
+        materials.add(material);
+        for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
       }
     });
   }
+  for (const texture of textures) texture.dispose();
+  for (const material of materials) material.dispose();
   environment?.dispose();
   pmrem?.dispose();
   renderer?.dispose();
@@ -76,12 +80,14 @@ function setOpacity(model, opacity) {
   model.traverse(node => {
     if (!node.isMesh) return;
     const transparent = opacity < 0.999;
-    if (node.material.transparent !== transparent) {
-      node.material.transparent = transparent;
-      node.material.needsUpdate = true;
+    for (const material of [node.material].flat()) {
+      if (material.transparent !== transparent) {
+        material.transparent = transparent;
+        material.needsUpdate = true;
+      }
+      material.opacity = opacity;
+      material.depthWrite = !transparent;
     }
-    node.material.opacity = opacity;
-    node.material.depthWrite = !transparent;
   });
 }
 
@@ -131,7 +137,7 @@ function render(timestamp) {
   for (let i = 0; i < models.length; i++) {
     if (!models[i]) continue;
     setOpacity(models[i], weights[i]);
-    models[i].rotation.y = Math.PI / 2 + currentTurns * Math.PI * 2;
+    models[i].rotation.y = 0.67 + currentTurns * Math.PI * 2;
   }
   layer.dataset.blend = weights.map(weight => weight.toFixed(3)).join(',');
 
@@ -157,41 +163,44 @@ function scheduleRender() {
   if (!renderFrame && !disposed) renderFrame = requestAnimationFrame(render);
 }
 
-function enhanceBottleMaterial(material) {
-  if (!material?.isMeshStandardMaterial) return;
-  // The supplied bottles use one baked material for both the glass and label,
-  // so keep it softly translucent without a strong studio-light sheen.
-  material.metalness = 0;
-  material.roughness = 0.2;
-  material.envMapIntensity = 0.72;
-  if (material.isMeshPhysicalMaterial) {
-    material.clearcoat = 0.5;
-    material.clearcoatRoughness = 0.16;
-    material.ior = 1.46;
-    material.specularIntensity = 0.62;
-    material.transmission = 0.14;
-    material.thickness = 0.18;
-    material.attenuationDistance = 2.4;
-    material.attenuationColor = new THREE.Color(0xffffff);
+// Broad vertical softboxes produce continuous, photographic bottle reflections.
+function createStudioEnvironment() {
+  const studio = new THREE.Scene();
+  studio.background = new THREE.Color(0x555860);
+  const panels = [
+    { position: [-3.5, 1, 2.5], size: [1.6, 6], strength: 7, color: 0xfff8ee },
+    { position: [3.5, 0.5, 1], size: [0.65, 5], strength: 9, color: 0xf2f6ff },
+    { position: [0, 4, -1], size: [4, 2], strength: 4, color: 0xffffff },
+    { position: [-1, 1, -4], size: [2, 4], strength: 3, color: 0xffffff },
+  ];
+  for (const { position, size, strength, color } of panels) {
+    const panel = new THREE.Mesh(
+      new THREE.PlaneGeometry(...size),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(strength), side: THREE.DoubleSide }),
+    );
+    panel.position.set(...position);
+    panel.lookAt(0, 0, 0);
+    studio.add(panel);
   }
-  material.needsUpdate = true;
+  return studio;
 }
 
-async function loadModel(loader, path) {
+async function loadModel(loader, path, index) {
   const gltf = await loader.loadAsync(path);
   const object = gltf.scene;
-  object.traverse(node => {
-    if (!node.isMesh) return;
-    if (Array.isArray(node.material)) node.material.forEach(enhanceBottleMaterial);
-    else enhanceBottleMaterial(node.material);
-  });
   object.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(object);
+  const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  object.traverse(node => {
+    if (node.isMesh) prepareBottleMesh(node, bounds, anisotropy, [0x159e95, 0xcd8b1d, 0xc8b62a][index]);
+  });
   const center = bounds.getCenter(new THREE.Vector3());
   const size = bounds.getSize(new THREE.Vector3());
   object.position.sub(center);
   const normalized = new THREE.Group();
   normalized.add(object);
+  const liquidColors = [0x008e83, 0xc87913, 0xb8a416];
+  normalized.add(createLiquidVolume(size, liquidColors[index]));
   // Preserve each source bottle's original proportions and only normalize its height.
   normalized.scale.setScalar(2.8 / Math.max(size.y, 0.001));
   const spin = new THREE.Group();
@@ -210,29 +219,35 @@ async function init() {
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.9;
+    renderer.toneMappingExposure = 1.0;
     mount.append(renderer.domElement);
     scene = new THREE.Scene();
     camera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 100);
     camera.position.set(0, 0.1, 6);
     camera.lookAt(0, 0, 0);
     pmrem = new THREE.PMREMGenerator(renderer);
-    const room = new RoomEnvironment();
-    environment = pmrem.fromScene(room, 0.04);
+    const studio = createStudioEnvironment();
+    environment = pmrem.fromScene(studio, 0.025);
     scene.environment = environment.texture;
-    room.dispose();
-    // Soft, low-contrast illumination reveals the translucent body without
-    // returning to the strong glossy hotspots used in the first pass.
-    scene.add(new THREE.AmbientLight(0xffffff, 1.12));
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d1ca, 0.34));
-    const bottleShapeLight = new THREE.DirectionalLight(0xfff8ef, 0.42);
-    bottleShapeLight.position.set(-2.5, 3.5, 4);
-    scene.add(bottleShapeLight);
+    studio.traverse(node => {
+      node.geometry?.dispose();
+      node.material?.dispose();
+    });
+    // Let the environment describe the curved surface instead of flattening it
+    // with strong uniform ambient light.
+    scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+    scene.add(new THREE.HemisphereLight(0xf4f7ff, 0x746456, 0.3));
+    const keyLight = new THREE.DirectionalLight(0xfff8ef, 1.3);
+    keyLight.position.set(-3, 4, 5);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xe8f0ff, 0.45);
+    fillLight.position.set(3, 1, -2);
+    scene.add(fillLight);
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     resize();
     // Decode sequentially to avoid three large texture/geometry allocations at once.
     for (let index = 0; index < paths.length; index++) {
-      models[index] = await loadModel(loader, paths[index]);
+      models[index] = await loadModel(loader, paths[index], index);
       if (index === 0) {
         layer.dataset.state = 'ready';
         document.documentElement.classList.add('has-bottle');
