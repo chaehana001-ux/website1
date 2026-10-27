@@ -8,12 +8,12 @@ function showProduct(i){const p=products[i];openDialog(`<img src="${p.image}" al
 document.querySelectorAll('[data-product]').forEach(el=>{el.addEventListener('click',()=>showProduct(+el.dataset.product));el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showProduct(+el.dataset.product)}})});
 document.querySelectorAll('.cart').forEach(el=>el.addEventListener('click',()=>openDialog('<h2>COMING SOON</h2><p>쿨리타의 새로운 상쾌함을 준비하고 있습니다.<br>제품 출시 후 구매하실 수 있습니다.</p><a class="pill" href="#shop" id="browse">제품 둘러보기</a>')));
 document.querySelector('.close').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',e=>{if(e.target===dialog||e.target.id==='browse')dialog.close()});
-let slide=0;document.querySelectorAll('.slide').forEach(el=>el.addEventListener('click',()=>{slide=(slide+(el.classList.contains('next')?1:2))%3;const label=document.querySelector('.sticker');label.textContent=['CULITA','FEEL GOOD','BE BOLD'][slide];label.style.transform=`rotate(${[7,-7,4][slide]}deg)`}));
 document.querySelectorAll('[data-policy]').forEach(el=>el.addEventListener('click',()=>openDialog(`<h2>${el.dataset.policy}</h2><p>이 페이지는 CULITA 디자인을 구현한 포트폴리오 데모입니다. 실제 상품 판매 및 개인정보 수집 기능은 제공하지 않습니다.</p>`)));
 function updateTime(){document.querySelector('#time').textContent=new Intl.DateTimeFormat('en-US',{hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Dubai'}).format(new Date())+' GST'}updateTime();setInterval(updateTime,60000);
 
 // Reveal the introduction letter by letter as each paragraph crosses the viewport.
-const revealParagraphs = [...document.querySelectorAll('.about-copy > p')].map(paragraph => {
+function collectAboutLetters() {
+return [...document.querySelectorAll('.about-copy > p')].map(paragraph => {
   const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
   const textNodes = [];
   while (walker.nextNode()) textNodes.push(walker.currentNode);
@@ -33,6 +33,9 @@ const revealParagraphs = [...document.querySelectorAll('.about-copy > p')].map(p
   }
   return { paragraph, letters: [...paragraph.querySelectorAll('.reveal-letter')] };
 });
+}
+let revealParagraphs = collectAboutLetters();
+const aboutRevealReference = revealParagraphs.flatMap(group => group.letters).map(letter => letter.textContent).join('');
 const revealMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 // Keep revealed content visible until it fully leaves, then replay on either re-entry.
 function replayWhenVisible(element, className, ready) {
@@ -55,12 +58,13 @@ function updateLetterReveal() {
   // Keep the original text reveal pace, but release the pin as “취향” darkens.
   const entryDistance = Math.max(0, viewportHeight * 0.85 - firstOffset);
   const revealDistance = entryDistance + pin.offsetHeight * 1.6;
-  const text = letters.map(letter => letter.textContent).join('');
+  // Keep the scroll and bottle timeline stable when the user changes the copy.
+  const text = aboutRevealReference;
   const releaseLetter = text.lastIndexOf('취향');
-  const releaseProgress = releaseLetter < 0 ? 1 : (releaseLetter + 1) / letters.length;
+  const releaseProgress = releaseLetter < 0 ? 1 : (releaseLetter + 1) / text.length;
   const progressAfterWord = word => {
     const wordStart = text.indexOf(word);
-    return wordStart < 0 ? 1 : (wordStart + word.length) / letters.length;
+    return wordStart < 0 ? 1 : (wordStart + word.length) / text.length;
   };
   section.dataset.firstBottleChange = progressAfterWord('익숙한').toFixed(4);
   section.dataset.secondBottleChange = progressAfterWord('순간').toFixed(4);
@@ -75,7 +79,7 @@ function updateLetterReveal() {
   ));
   section.dataset.revealProgress = progress.toFixed(4);
   letters.forEach((letter, index) => {
-    const strength = Math.max(0, Math.min(1, progress * letters.length - index));
+    const strength = section.dataset.manualSlide === 'true' ? 1 : Math.max(0, Math.min(1, progress * letters.length - index));
     const shade = Math.round(210 * (1 - strength));
     letter.style.color = `rgb(${shade}, ${shade}, ${shade})`;
   });
@@ -89,6 +93,62 @@ window.addEventListener('pageshow', scheduleLetterReveal);
 revealMotionPreference.addEventListener('change', scheduleLetterReveal);
 document.fonts.ready.then(scheduleLetterReveal);
 updateLetterReveal();
+
+// A single copy area changes in place; retain the original light/bold typography.
+const aboutSection = document.querySelector('.about');
+const aboutCopy = aboutSection.querySelector('.about-copy');
+const aboutNote = aboutSection.querySelector('.about-note');
+const aboutText = [...aboutCopy.querySelectorAll(':scope > p')];
+const aboutSlides = [
+  { top: aboutText[0].innerHTML, bottom: aboutText[1].innerHTML, note: aboutNote.innerHTML },
+  {
+    top: '오늘의 <strong>기분</strong>에 따라<br><strong>새로운 취향</strong>을 발견하는 순간',
+    bottom: '입안에 <strong>퍼지는 향</strong>까지<br><strong>나만의 감각</strong>으로 <strong>선택</strong>하다',
+    note: '산뜻한 시트러스부터 트로피컬 프루츠, 달콤한 붉은 과실향까지.<br>오늘의 기분에 어울리는 플레이버로 나만의 상쾌함을 찾아보세요.',
+  },
+  {
+    top: '평범한 <strong>일상</strong>을 넘어<br><strong>나를 위한 시간</strong>을 만드는 순간',
+    bottom: '매일의 <strong>작은 케어</strong>까지<br><strong>기분 좋은 선물</strong>로 <strong>기념</strong>하다',
+    note: '하루를 시작하는 아침에도, 나를 돌보는 저녁에도.<br>쿨리타와 함께하는 작은 루틴으로 오늘의 나에게 기분 좋은 인사를 건네세요.',
+  },
+];
+let aboutSlideIndex = 0;
+const aboutStatus = document.createElement('span');
+aboutStatus.className = 'about-slide-status';
+aboutStatus.setAttribute('role', 'status');
+aboutStatus.setAttribute('aria-live', 'polite');
+aboutSection.querySelector('.about-pin').append(aboutStatus);
+aboutCopy.id = 'about-slide-copy';
+aboutCopy.setAttribute('role', 'group');
+aboutCopy.setAttribute('aria-roledescription', '슬라이드');
+aboutCopy.setAttribute('aria-label', '1 / 3');
+document.querySelectorAll('.about .slide').forEach(button => {
+  button.setAttribute('aria-controls', aboutCopy.id);
+  button.addEventListener('click', () => {
+    const direction = button.classList.contains('next') ? 1 : -1;
+    aboutSlideIndex = (aboutSlideIndex + direction + aboutSlides.length) % aboutSlides.length;
+    const content = aboutSlides[aboutSlideIndex];
+    aboutText[0].innerHTML = content.top;
+    aboutText[1].innerHTML = content.bottom;
+    aboutNote.innerHTML = content.note;
+    // Strip existing letter wrappers when restoring the initial slide.
+    aboutText.forEach(paragraph => paragraph.querySelectorAll('.reveal-letter').forEach(letter => letter.replaceWith(letter.textContent)));
+    revealParagraphs = collectAboutLetters();
+    aboutSection.dataset.manualSlide = 'true';
+    aboutCopy.setAttribute('aria-label', `${aboutSlideIndex + 1} / ${aboutSlides.length}`);
+    aboutStatus.textContent = `${aboutSlideIndex + 1} / ${aboutSlides.length}`;
+    updateLetterReveal();
+    if (!revealMotionPreference.matches) {
+      [...aboutText, aboutNote].forEach(element => {
+        element.getAnimations().forEach(animation => animation.cancel());
+        element.animate([
+          { opacity: 0, transform: `translateX(${direction * 16}px)` },
+          { opacity: 1, transform: 'translateX(0)' },
+        ], { duration: 320, easing: 'ease-out' });
+      });
+    }
+  });
+});
 
 // Reveal each story as the trail reaches it without interrupting native scroll.
 const trailSection = document.querySelector('.advantages');
@@ -324,85 +384,94 @@ window.addEventListener('pageshow', scheduleAdvantagesTitle);
 revealMotionPreference.addEventListener('change', scheduleAdvantagesTitle);
 updateAdvantagesTitle();
 
-// Reveal body paragraphs and images independently, including on narrow screens.
-const brandStoryRows = [...document.querySelectorAll('.origin-row')];
-if ('IntersectionObserver' in window) {
-  const brandStoryObserver = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
-        entry.target.classList.add('is-visible');
-      } else if (!entry.isIntersecting) {
-        entry.target.classList.remove('is-visible');
-      }
+// Retain readable source articles as the no-JavaScript version of the story.
+initBrandShowcase();
+function initBrandShowcase() {
+  const section = document.querySelector('.origin-stories');
+  const rows = [...section.querySelectorAll('.origin-row')];
+  const stage = document.createElement('div');
+  stage.className = 'brand-stage';
+  const backgrounds = document.createElement('div');
+  backgrounds.className = 'brand-backgrounds';
+  backgrounds.setAttribute('aria-hidden', 'true');
+  const intro = document.createElement('div');
+  intro.className = 'brand-intro';
+  intro.innerHTML = '<p class="eyebrow">● OUR STORY ●</p><h2>CHEERS<br>TO LIFE</h2><p>나를 돌보는 작은 순간,<br>쿨리타와 함께하는 특별한 일상.</p>';
+  const cards = document.createElement('div');
+  cards.className = 'brand-cards';
+  const card = document.createElement('article');
+  card.className = 'brand-card';
+  card.id = 'brand-story-current';
+  cards.append(card);
+  const storyContents = [];
+  const navigation = document.createElement('div');
+  navigation.className = 'brand-navigation';
+  navigation.setAttribute('role', 'group');
+  navigation.setAttribute('aria-label', '브랜드 스토리 선택');
+  rows.forEach((row, index) => {
+    const art = row.querySelector('.origin-art');
+    const image = art.cloneNode();
+    image.removeAttribute('class');
+    image.alt = '';
+    image.loading = 'eager';
+    backgrounds.append(image);
+    art.remove();
+    storyContents.push(row.querySelector('.origin-copy').outerHTML);
+    row.remove();
+    const button = document.createElement('button');
+    button.className = 'brand-thumbnail';
+    button.setAttribute('aria-label', `${index + 1}. ${row.querySelector('h2').textContent}`);
+    button.setAttribute('aria-controls', card.id);
+    button.innerHTML = `<img src="${image.getAttribute('src')}" alt=""><span>0${index + 1}</span>`;
+    button.addEventListener('click', () => {
+      const top = section.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: top + index * window.innerHeight, behavior: revealMotionPreference.matches ? 'instant' : 'smooth' });
+    });
+    navigation.append(button);
+  });
+  const counter = document.createElement('p');
+  counter.className = 'brand-counter';
+  const controls = document.createElement('div');
+  controls.className = 'brand-controls';
+  controls.innerHTML = '<button aria-label="이전 브랜드 스토리">←</button><span></span><button aria-label="다음 브랜드 스토리">→</button>';
+  controls.replaceChild(counter, controls.querySelector('span'));
+  stage.append(backgrounds, intro, cards, navigation, controls);
+  section.append(stage);
+  section.classList.add('brand-showcase');
+  let active = -1;
+  let frame = 0;
+  function update() {
+    frame = 0;
+    const progress = -section.getBoundingClientRect().top / window.innerHeight;
+    const next = Math.max(0, Math.min(rows.length - 1, Math.floor(progress + .18)));
+    if (next === active) return;
+    active = next;
+    card.innerHTML = storyContents[active];
+    if (!revealMotionPreference.matches) {
+      card.getAnimations().forEach(animation => animation.cancel());
+      card.animate([
+        { opacity: 0, transform: 'translateY(12px)' },
+        { opacity: 1, transform: 'translateY(0)' },
+      ], { duration: 350, easing: 'ease-out' });
     }
-  }, { threshold: [0, 0.15] });
-  function syncBrandStoryMotion() {
-    brandStoryObserver.disconnect();
-    for (const row of brandStoryRows) {
-      row.classList.toggle('has-story-motion', !revealMotionPreference.matches);
-      for (const element of row.querySelectorAll('.origin-copy>p, .origin-art')) {
-        element.classList.remove('is-visible');
-        if (!revealMotionPreference.matches) brandStoryObserver.observe(element);
-      }
-    }
+    rows.forEach((_, i) => {
+      backgrounds.children[i].classList.toggle('is-active', i === active);
+      navigation.children[i].setAttribute('aria-pressed', String(i === active));
+    });
+    counter.textContent = `0${active + 1} / 0${rows.length}`;
+    controls.firstElementChild.disabled = active === 0;
+    controls.lastElementChild.disabled = active === rows.length - 1;
   }
-  revealMotionPreference.addEventListener('change', syncBrandStoryMotion);
-  syncBrandStoryMotion();
+  controls.firstElementChild.addEventListener('click', () => navigation.children[Math.max(0, active - 1)].click());
+  controls.lastElementChild.addEventListener('click', () => navigation.children[Math.min(rows.length - 1, active + 1)].click());
+  function schedule() { if (!frame) frame = requestAnimationFrame(update); }
+  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', schedule);
+  window.addEventListener('pageshow', schedule);
+  update();
 }
 
-// Ink the heading in reading order as it crosses the viewport; reverse on scroll-up.
-const brandInkHeadings = brandStoryRows.map((row) => {
-  const heading = row.querySelector('h2');
-  const number = row.querySelector('.origin-number');
-  const walker = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  const letters = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  for (const node of nodes) {
-    const fragment = document.createDocumentFragment();
-    for (const character of node.textContent) {
-      if (/\s/u.test(character)) {
-        fragment.append(document.createTextNode(character));
-      } else {
-        const letter = document.createElement('span');
-        letter.className = 'origin-title-letter';
-        letter.textContent = character;
-        letters.push(letter);
-        fragment.append(letter);
-      }
-    }
-    node.replaceWith(fragment);
-  }
-  return { heading, number, letters };
-});
-let brandInkFrame = 0;
-function updateBrandInk() {
-  brandInkFrame = 0;
-  const viewport = window.innerHeight;
-  for (const { heading, number, letters } of brandInkHeadings) {
-    const rect = heading.getBoundingClientRect();
-    const progress = revealMotionPreference.matches ? 1 : Math.max(0, Math.min(1,
-      (viewport * 0.85 - rect.top) / (viewport * 0.35 + rect.height * 0.3),
-    ));
-    letters.forEach((letter, index) => {
-      const ink = Math.max(0, Math.min(1, (progress * (letters.length + 3) - index) / 4));
-      const shade = Math.round(210 * (1 - ink));
-      const color = `rgb(${shade}, ${shade}, ${shade})`;
-      if (letter.style.color !== color) letter.style.color = color;
-    });
-    const numberShade = Math.round(210 * (1 - progress));
-    number.style.color = `rgb(${numberShade}, ${numberShade}, ${numberShade})`;
-  }
-}
-function scheduleBrandInk() {
-  if (!brandInkFrame) brandInkFrame = requestAnimationFrame(updateBrandInk);
-}
-window.addEventListener('scroll', scheduleBrandInk, { passive: true });
-window.addEventListener('resize', scheduleBrandInk);
-window.addEventListener('pageshow', scheduleBrandInk);
-revealMotionPreference.addEventListener('change', scheduleBrandInk);
-document.fonts.ready.then(scheduleBrandInk);
-updateBrandInk();
+
 
 // Move only the background wordmark; leave bottle rotation and layout untouched.
 const heroWordmarkSection = document.querySelector('.hero');
