@@ -145,7 +145,7 @@ function render(timestamp) {
   const arrival = THREE.MathUtils.smoothstep(1 - aboutTop / viewportHeight, 0, 1);
   const stickerRect = sticker.getBoundingClientRect();
   const pinnedCenter = stickerRect.top + stickerRect.height / 2;
-  const heroCenter = Math.min(viewportHeight * 0.64, hero.offsetHeight * 0.64);
+  const heroCenter = viewportHeight * 0.5 - 30;
   // Use the text's middle gap while pinned, then stay put as Shop covers the bottle.
   const centerY = THREE.MathUtils.lerp(heroCenter, clamp(pinnedCenter, viewportHeight * 0.35, viewportHeight * 0.65), arrival);
   mount.style.top = `${centerY}px`;

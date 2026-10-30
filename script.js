@@ -156,6 +156,28 @@ const trailArtwork = trailSection.querySelector('.trail');
 const trailStops = [...trailArtwork.querySelectorAll('.dot')];
 const storyCards = [...trailSection.querySelectorAll('.story')];
 const compactStories = window.matchMedia('(max-width: 600px)');
+const mobileStoryTrail = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+mobileStoryTrail.classList.add('mobile-story-trail');
+mobileStoryTrail.setAttribute('aria-hidden', 'true');
+const mobileStoryPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+const mobileStoryMask = document.createElementNS('http://www.w3.org/2000/svg', 'mask');
+mobileStoryMask.id = 'mobile-story-image-mask';
+mobileStoryMask.setAttribute('maskUnits', 'userSpaceOnUse');
+const mobileStoryMaskBase = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+mobileStoryMaskBase.setAttribute('fill', '#fff');
+mobileStoryMask.append(mobileStoryMaskBase);
+const mobileStoryImageMasks = storyCards.map(() => {
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.setAttribute('fill', '#000');
+  mobileStoryMask.append(rect);
+  return rect;
+});
+const mobileStoryDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+mobileStoryDefs.append(mobileStoryMask);
+mobileStoryTrail.append(mobileStoryDefs);
+mobileStoryPath.setAttribute('mask', 'url(#mobile-story-image-mask)');
+mobileStoryTrail.append(mobileStoryPath);
+trailSection.prepend(mobileStoryTrail);
 let trailFrame = 0;
 function updateStoryReveal() {
   trailFrame = 0;
@@ -163,8 +185,53 @@ function updateStoryReveal() {
   const viewportHeight = window.innerHeight;
   const cursor = viewportHeight * 0.72;
   const scrollPosition = window.scrollY;
+  if (compactStories.matches) {
+    const sectionRect = trailSection.getBoundingClientRect();
+    const anchors = storyCards.map((card, index) => {
+      const label = card.querySelector('.story-label b').getBoundingClientRect();
+      const photo = card.querySelector('.story-photo').getBoundingClientRect();
+      const mask = mobileStoryImageMasks[index];
+      mask.setAttribute('x', photo.left - sectionRect.left - 1);
+      mask.setAttribute('y', photo.top - sectionRect.top - 1);
+      mask.setAttribute('width', photo.width + 2);
+      mask.setAttribute('height', photo.height + 2);
+      return {
+        x: label.left + label.width / 2 - sectionRect.left,
+        y: label.top + label.height / 2 - sectionRect.top,
+        left: photo.left - sectionRect.left,
+        right: photo.right - sectionRect.left,
+        middle: photo.top + photo.height * .6 - sectionRect.top,
+        bottom: photo.bottom - sectionRect.top,
+      };
+    });
+    mobileStoryMaskBase.setAttribute('width', sectionRect.width);
+    mobileStoryMaskBase.setAttribute('height', sectionRect.height);
+    mobileStoryTrail.setAttribute('viewBox', `0 0 ${sectionRect.width} ${sectionRect.height}`);
+    const mobileConnections = anchors.slice(0, -1).map((point, index) => {
+      const next = anchors[index + 1];
+      const outside = index % 2 === 0
+        ? point.right + (sectionRect.width - point.right) * .65
+        : point.left * .35;
+      const turn = point.bottom + (next.y - point.bottom) * .5;
+      return `M${point.x},${point.y} C${point.x},${point.y + 80} ${outside},${point.middle - 100} ${outside},${point.middle} C${outside},${turn} ${next.x},${turn} ${next.x},${next.y}`;
+    }).join(' ');
+    const last = anchors[anchors.length - 1];
+    const lastPhoto = storyCards[storyCards.length - 1]?.querySelector('.story-photo').getBoundingClientRect();
+    const lastPhotoCenter = lastPhoto ? lastPhoto.left + lastPhoto.width / 2 - sectionRect.left : 0;
+    const lastPhotoBottom = lastPhoto ? lastPhoto.bottom - sectionRect.top : 0;
+    const ending = last && lastPhoto
+      ? `M${last.x},${last.y} C${last.x},${last.y + 45} ${last.left * .35},${lastPhoto.top - sectionRect.top + 20} ${last.left * .35},${lastPhoto.top - sectionRect.top + 55} C${last.left * .35},${lastPhoto.top - sectionRect.top + 90} ${last.left + 20},${lastPhoto.top - sectionRect.top + 110} ${last.left + 45},${lastPhoto.top - sectionRect.top + 120} M${lastPhotoCenter - lastPhoto.width * .2},${lastPhotoBottom - 35} C${lastPhotoCenter - 10},${lastPhotoBottom + 5} ${lastPhotoCenter + 8},${lastPhotoBottom + 25} ${lastPhotoCenter + 12},${sectionRect.height}`
+      : '';
+    mobileStoryPath.setAttribute('d', `${mobileConnections} ${ending}`);
+    const remaining = reducedMotion ? 0 : Math.max(0, Math.min(sectionRect.height, sectionRect.bottom - cursor));
+    mobileStoryTrail.style.clipPath = `inset(0 0 ${remaining}px 0)`;
+  }
   const thresholds = storyCards.map((card, index) => {
-    const mobileOrFirst = compactStories.matches || index === 0;
+    if (compactStories.matches) {
+      const label = card.querySelector('.story-label b').getBoundingClientRect();
+      return label.top + label.height / 2 + scrollPosition - cursor;
+    }
+    const mobileOrFirst = index === 0;
     const anchor = mobileOrFirst ? card.querySelector('.story-photo') : trailStops[index];
     return anchor.getBoundingClientRect().top + scrollPosition
       - (mobileOrFirst ? viewportHeight * 0.35 : cursor);
@@ -193,6 +260,7 @@ window.addEventListener('pageshow', scheduleStoryReveal);
 revealMotionPreference.addEventListener('change', scheduleStoryReveal);
 compactStories.addEventListener('change', scheduleStoryReveal);
 document.fonts.ready.then(scheduleStoryReveal);
+if ('ResizeObserver' in window) new ResizeObserver(scheduleStoryReveal).observe(trailSection);
 updateStoryReveal();
 
 // Bring the standards rows in one by one when its title reaches mid-screen.
@@ -278,7 +346,7 @@ function updateClosingReveal() {
   const rect = closingHeadline.getBoundingClientRect();
   const headlineCenter = rect.top + rect.height / 2;
   const sectionBottom = closingSection.getBoundingClientRect().bottom;
-  const isReady = headlineCenter <= window.innerHeight * 0.55 && sectionBottom > 0;
+  const isReady = headlineCenter <= window.innerHeight * 0.85 && sectionBottom > 0;
   replayWhenVisible(closingHeadline, 'is-visible', isReady);
 }
 
@@ -499,6 +567,106 @@ updateHeroWordmark();
 
 // Observe stationary slots so card movement cannot retrigger its own observer.
 const productGrid = document.querySelector('.products');
+const productHeading = document.createElement('div');
+productHeading.className = 'product-heading';
+if (productGrid && shopTitle) {
+  const eyebrow = shopSection.querySelector(':scope > .eyebrow');
+  shopSection.insertBefore(productHeading, eyebrow || shopTitle);
+  if (eyebrow) productHeading.append(eyebrow);
+  productHeading.append(shopTitle);
+}
+const mobileProductStack = window.matchMedia('(max-width: 600px) and (prefers-reduced-motion: no-preference)');
+const stackedProductSlots = [...(productGrid?.querySelectorAll('.product-slot') || [])];
+const productStage = document.createElement('div');
+productStage.className = 'product-stage';
+if (productGrid) {
+  shopSection.insertBefore(productStage, productHeading);
+  productStage.append(productHeading, productGrid);
+}
+let productStackFrame = 0;
+let productPauseUntil = 0;
+let productPauseScroll = 0;
+let lastPausedProduct = -1;
+let previousProductScroll = window.scrollY;
+let productTouchY = null;
+function productPauseActive() {
+  return mobileProductStack.matches && performance.now() < productPauseUntil;
+}
+window.addEventListener('wheel', event => {
+  if (productPauseActive() && event.deltaY > 0 && event.cancelable) event.preventDefault();
+}, { passive: false });
+window.addEventListener('touchstart', event => {
+  productTouchY = event.touches[0]?.clientY ?? null;
+}, { passive: true });
+window.addEventListener('touchmove', event => {
+  const y = event.touches[0]?.clientY;
+  if (productPauseActive() && productTouchY !== null && y < productTouchY && event.cancelable) event.preventDefault();
+  productTouchY = y ?? null;
+}, { passive: false });
+function updateProductStack() {
+  productStackFrame = 0;
+  if (!mobileProductStack.matches) {
+    productPauseUntil = 0;
+    lastPausedProduct = -1;
+    previousProductScroll = window.scrollY;
+    shopSection?.style.removeProperty('height');
+    productGrid?.style.removeProperty('--stack-height');
+    stackedProductSlots.forEach(slot => {
+      slot.style.removeProperty('--card-offset');
+      slot.style.removeProperty('--card-shade');
+      slot.style.removeProperty('visibility');
+    });
+    return;
+  }
+  const heights = stackedProductSlots.map(slot => slot.querySelector('.product').offsetHeight);
+  const cardHeight = Math.max(...heights);
+  const headingHeight = productHeading.getBoundingClientRect().height;
+  const travel = Math.max(cardHeight, window.innerHeight * .65);
+  const sectionTop = shopSection.getBoundingClientRect().top + window.scrollY;
+  let currentScroll = window.scrollY;
+  const movingDown = currentScroll > previousProductScroll;
+  if (currentScroll < previousProductScroll - 1) productPauseUntil = 0;
+  if (movingDown && productPauseActive() && currentScroll > productPauseScroll) {
+    currentScroll = productPauseScroll;
+    window.scrollTo({ top: currentScroll, behavior: 'instant' });
+  }
+  let scrollDistance = Math.max(0, currentScroll - sectionTop);
+  if (currentScroll < sectionTop - 4) lastPausedProduct = -1;
+  else if (!movingDown && scrollDistance < lastPausedProduct * travel - 4) {
+    lastPausedProduct = Math.max(-1, Math.floor(scrollDistance / travel));
+  }
+  const nextPause = lastPausedProduct + 1;
+  const boundary = sectionTop + nextPause * travel;
+  if (movingDown && !productPauseActive() && nextPause < stackedProductSlots.length && previousProductScroll <= boundary && currentScroll >= boundary) {
+    lastPausedProduct = nextPause;
+    productPauseScroll = boundary;
+    productPauseUntil = performance.now() + 500;
+    currentScroll = boundary;
+    scrollDistance = nextPause * travel;
+    window.scrollTo({ top: boundary, behavior: 'instant' });
+  }
+  previousProductScroll = currentScroll;
+  productGrid.style.setProperty('--stack-height', `${cardHeight}px`);
+  const stageHeight = Math.max(productStage.offsetHeight, headingHeight + 12 + cardHeight + 48);
+  shopSection.style.height = `${stageHeight + travel * (stackedProductSlots.length - 1) + 48}px`;
+  stackedProductSlots.forEach((slot, index) => {
+    const progress = Math.max(0, Math.min(1, scrollDistance / travel - (index - 1)));
+    const covering = index < stackedProductSlots.length - 1 ? Math.max(0, Math.min(1, scrollDistance / travel - index)) : 0;
+    slot.style.setProperty('--card-offset', `${index === 0 ? 0 : (1 - progress) * (cardHeight + 16)}px`);
+    slot.style.setProperty('--card-shade', (covering * .6).toFixed(3));
+    slot.style.visibility = index > 0 && progress === 0 ? 'hidden' : '';
+  });
+}
+function scheduleProductStack() {
+  if (!productStackFrame) productStackFrame = requestAnimationFrame(updateProductStack);
+}
+window.addEventListener('scroll', scheduleProductStack, { passive: true });
+window.addEventListener('resize', scheduleProductStack);
+window.addEventListener('pageshow', scheduleProductStack);
+mobileProductStack.addEventListener('change', scheduleProductStack);
+if ('ResizeObserver' in window && productGrid) new ResizeObserver(scheduleProductStack).observe(productGrid);
+if ('ResizeObserver' in window) new ResizeObserver(scheduleProductStack).observe(productHeading);
+scheduleProductStack();
 if (productGrid && 'IntersectionObserver' in window) {
   const productSlots = [...productGrid.querySelectorAll('.product-slot')];
   const productEntranceObserver = new IntersectionObserver((entries) => {
